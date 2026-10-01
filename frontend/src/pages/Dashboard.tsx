@@ -118,7 +118,7 @@ export default function Dashboard() {
       <Card>
         <CardHeader title="Readiness Timeline" subtitle="Statutory commencement per official MeitY notification G.S.R. 843(E)" />
         <div className="flex flex-wrap items-center gap-2 p-4 text-xs">
-          <TimelineStep title="Today" date="18 Sep 2026" active />
+          <TimelineStep title="Today" date={fmtDate(new Date().toISOString().slice(0, 10))} active />
           <Arrow />
           <TimelineStep title="12-Month Phase" date={fmtDate(data.readiness_timeline.twelve_month_date)} note="Consent Manager provisions" />
           <Arrow />

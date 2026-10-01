@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { actionsApi, kcasApi, ownersApi, controlsApi, applicationsApi, getOptions, exportUrl } from '../lib/api'
+import { actionsApi, kcasApi, ownersApi, controlsApi, applicationsApi, evidenceApi, uploadEvidenceFile, getOptions, exportUrl } from '../lib/api'
 import { Card, Select, PriorityBadge, Button, Modal, Field, inputClass, Disclaimer } from '../components/ui'
 import { label, fmtDate } from '../lib/format'
-import type { Action, Kca, Owner, Control, Application, Options } from '../lib/types'
+import type { Action, Kca, Owner, Control, Application, Options, EvidenceSummary } from '../lib/types'
 
 function errorMessage(err: unknown): string {
   const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -177,7 +177,40 @@ function ActionFormModal({ kcas, owners, controls, apps, options, initial, onClo
   const set = (k: string, v: unknown) => setForm((f: any) => ({ ...f, [k]: v }))
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [formError, setFormError] = useState<string | null>(null)
-  const hasEvidence = (initial?.evidence ?? []).length > 0
+  const [linked, setLinked] = useState<EvidenceSummary[]>(initial?.evidence ?? [])
+  const hasEvidence = linked.length > 0
+  const [ev, setEv] = useState({ name: '', type: 'OTHER', url: '', file: null as File | null })
+  const [evBusy, setEvBusy] = useState(false)
+  const [evError, setEvError] = useState<string | null>(null)
+  const close = () => (linked.length > (initial?.evidence ?? []).length ? onSaved() : onClose())
+
+  const addEvidence = async () => {
+    if (!initial) return
+    if (!ev.file && !ev.url.trim()) { setEvError('Attach a file or paste a URL.'); return }
+    setEvBusy(true)
+    setEvError(null)
+    try {
+      let url = ev.url.trim()
+      let name = ev.name.trim()
+      if (ev.file) {
+        const up = await uploadEvidenceFile(ev.file)
+        url = up.file_url
+        name = name || up.original_name
+      }
+      const payload: any = {
+        name: name || url, evidence_type: ev.type, file_url: url, application_id: form.application_id,
+        owner_id: form.owner_id, date: new Date().toISOString().slice(0, 10),
+        action_ids: [initial.id], control_ids: form.control_id ? [form.control_id] : [],
+      }
+      const created = await evidenceApi.create(payload)
+      setLinked(l => [...l, created])
+      setEv({ name: '', type: 'OTHER', url: '', file: null })
+    } catch (err) {
+      setEvError(errorMessage(err))
+    } finally {
+      setEvBusy(false)
+    }
+  }
 
   const submit = async () => {
     const nextErrors: Record<string, string> = {}
@@ -197,7 +230,7 @@ function ActionFormModal({ kcas, owners, controls, apps, options, initial, onClo
   }
 
   return (
-    <Modal title={initial ? `Edit ${initial.action_id}` : 'Add Action'} onClose={onClose} wide>
+    <Modal title={initial ? `Edit ${initial.action_id}` : 'Add Action'} onClose={close} wide>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Action ID"><input className={inputClass} value={form.action_id} onChange={e => set('action_id', e.target.value)} /></Field>
         <Field label="KCA">
@@ -252,10 +285,37 @@ function ActionFormModal({ kcas, owners, controls, apps, options, initial, onClo
         <div className="col-span-2"><Field label="Blocker"><input className={inputClass} value={form.blocker ?? ''} onChange={e => set('blocker', e.target.value)} /></Field></div>
         <div className="col-span-2"><Field label="Dependency"><input className={inputClass} value={form.dependency ?? ''} onChange={e => set('dependency', e.target.value)} /></Field></div>
         <div className="col-span-2"><Field label="Notes"><textarea className={inputClass} rows={2} value={form.notes ?? ''} onChange={e => set('notes', e.target.value)} /></Field></div>
+        <div className="col-span-2 rounded border border-stone-200 bg-stone-50 p-3">
+          <div className="mb-2 text-xs font-semibold text-stone-700">Evidence ({linked.length})</div>
+          {linked.map(e => (
+            <div key={e.id} className="mb-1 flex items-center gap-2 text-xs text-stone-600">
+              <span className="font-mono text-stone-400">{e.evidence_id}</span>
+              <span>{e.name}</span>
+              {e.file_url && <a className="text-orange-700 underline" href={e.file_url} target="_blank" rel="noreferrer">open</a>}
+            </div>
+          ))}
+          {!initial ? (
+            <div className="text-[11px] text-stone-400">Save the action first, then reopen it to attach evidence.</div>
+          ) : (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <input className={inputClass} placeholder="Name (optional - defaults to file name)" value={ev.name} onChange={e => setEv(v => ({ ...v, name: e.target.value }))} />
+              <select className={inputClass} value={ev.type} onChange={e => setEv(v => ({ ...v, type: e.target.value }))}>
+                {options.evidence_types.map(t => <option key={t} value={t}>{label(t)}</option>)}
+              </select>
+              <input className={inputClass} placeholder="Paste a URL (or choose a file →)" value={ev.url} onChange={e => setEv(v => ({ ...v, url: e.target.value }))} />
+              <input type="file" className="text-xs" onChange={e => setEv(v => ({ ...v, file: e.target.files?.[0] ?? null }))} />
+              <div className="col-span-2 flex items-center gap-2">
+                <Button onClick={addEvidence}>{evBusy ? 'Adding…' : 'Add evidence'}</Button>
+                {evError && <span className="text-[11px] text-red-600">{evError}</span>}
+                <span className="text-[11px] text-stone-400">Also appears in the Evidence section.</span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
       {formError && <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{formError}</div>}
       <div className="mt-4 flex justify-end gap-2">
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={close}>Cancel</Button>
         <Button variant="primary" onClick={submit}>Save</Button>
       </div>
     </Modal>

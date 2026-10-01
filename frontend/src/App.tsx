@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './lib/authContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import HowItWorks from './pages/HowItWorks'
 import Requirements from './pages/Requirements'
 import RequirementDetail from './pages/RequirementDetail'
 import KcaScorecard from './pages/KcaScorecard'
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="login" element={<Login />} />
         <Route element={<RequireAuth><Layout /></RequireAuth>}>
           <Route index element={<Dashboard />} />
+          <Route path="how-it-works" element={<HowItWorks />} />
           <Route path="requirements" element={<Requirements />} />
           <Route path="requirements/:id" element={<RequirementDetail />} />
           <Route path="kca-scorecard" element={<KcaScorecard />} />

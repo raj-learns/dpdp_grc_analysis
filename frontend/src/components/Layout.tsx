@@ -9,6 +9,7 @@ type NavGroup = { group: string; items: NavLeaf[] }
 type NavEntry = NavLeaf | NavGroup
 
 const NAV: NavEntry[] = [
+  { to: '/how-it-works', label: 'How It Works' },
   { to: '/', label: 'Dashboard', end: true },
   { to: '/requirements', label: 'Requirements' },
   {

@@ -157,7 +157,7 @@ function EvidenceFormModal({ apps, controls, actions, owners, options, initial, 
   return (
     <Modal title={initial ? `Edit ${initial.evidence_id}` : 'Add Evidence'} onClose={onClose} wide>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Evidence ID"><input className={inputClass} value={form.evidence_id} onChange={e => set('evidence_id', e.target.value)} /></Field>
+        <Field label="Evidence ID"><input readOnly disabled className={inputClass} placeholder="Auto-generated on save" value={form.evidence_id} /></Field>
         <Field label="Type">
           <select className={inputClass} value={form.evidence_type} onChange={e => set('evidence_type', e.target.value)}>
             {options.evidence_types.map(s => <option key={s} value={s}>{label(s)}</option>)}
