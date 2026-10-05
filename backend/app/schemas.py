@@ -291,6 +291,7 @@ class EvidenceBase(ORMBase):
 
 
 class EvidenceCreate(EvidenceBase):
+    evidence_id: Optional[str] = None  # blank -> server generates the next EVD-#### id
     control_ids: list[int] = []
     action_ids: list[int] = []
 

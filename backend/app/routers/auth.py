@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -19,6 +20,7 @@ def login(payload: schemas.LoginRequest, response: Response, db: Session = Depen
         key=SESSION_COOKIE_NAME,
         value=session.id,
         httponly=True,
+        secure=os.environ.get("COOKIE_SECURE", "false").lower() == "true",
         samesite="lax",
         max_age=int(SESSION_TTL.total_seconds()),
         path="/",

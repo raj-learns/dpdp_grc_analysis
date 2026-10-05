@@ -1,17 +1,18 @@
 import os
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from .. import constants, models, schemas
-from ..database import BASE_DIR, get_db
+from ..database import DATA_DIR, get_db
 from ..compliance import evidence_coverage
 from ..auth import get_current_user
 
 router = APIRouter(prefix="/api/evidence", tags=["Evidence"], dependencies=[Depends(get_current_user)])
 
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 
 
 @router.post("/upload")
@@ -78,9 +79,17 @@ def _apply_links(db: Session, evidence: models.Evidence, control_ids, action_ids
         evidence.actions = db.scalars(select(models.Action).where(models.Action.id.in_(action_ids))).all()
 
 
+def _next_evidence_id(db: Session) -> str:
+    """Next free EVD-#### id; ids not matching that pattern (e.g. EVD-CM-001) are ignored."""
+    nums = [int(m.group(1)) for eid in db.scalars(select(models.Evidence.evidence_id))
+            if (m := re.fullmatch(r"EVD-(\d+)", eid))]
+    return f"EVD-{max(nums, default=0) + 1:04d}"
+
+
 @router.post("", response_model=schemas.EvidenceRead)
 def create_evidence(payload: schemas.EvidenceCreate, db: Session = Depends(get_db)):
     data = payload.model_dump(exclude={"control_ids", "action_ids"})
+    data["evidence_id"] = (data["evidence_id"] or "").strip() or _next_evidence_id(db)
     evidence = models.Evidence(**data)
     db.add(evidence)
     db.flush()

@@ -1,9 +1,10 @@
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from .database import Base, BASE_DIR, engine, SessionLocal
+from fastapi.responses import FileResponse
+from .database import Base, DATA_DIR, engine, SessionLocal
 from . import models  # noqa: F401 - ensure models are registered on Base before create_all
 from . import migrations
 from . import seed_data
@@ -12,7 +13,7 @@ from .routers import (
     dashboard, phases, gaps, reports, settings, questionnaire, news, auth
 )
 
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)  # StaticFiles below needs this to exist at import time
 
 app = FastAPI(
@@ -61,6 +62,23 @@ for r in (kcas.router, owners.router, applications.router, requirements.router,
 app.mount("/api/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 
-@app.get("/api/health")
+@app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+# Production: serve the built React app from this same process (no Vite proxy,
+# no CORS). Only active when the build output exists (i.e. inside the Docker image).
+FRONTEND_DIST = os.environ.get("FRONTEND_DIST", "")
+if FRONTEND_DIST and os.path.isdir(FRONTEND_DIST):
+    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa(full_path: str):
+        # Unknown /api paths must stay real 404s, not index.html.
+        if full_path.startswith("api/"):
+            raise HTTPException(404, "Not found")
+        candidate = os.path.realpath(os.path.join(FRONTEND_DIST, full_path))
+        if candidate.startswith(os.path.realpath(FRONTEND_DIST) + os.sep) and os.path.isfile(candidate):
+            return FileResponse(candidate)
+        return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
